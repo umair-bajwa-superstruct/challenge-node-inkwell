@@ -8,7 +8,7 @@
     "lint-fix": "standard --fix",
     "lint": "standard",
     "deps": "depcheck .",
-    "test": "nyc tape 'test/**/*.test.js' && npm run deps && npm run lint",
+    "test": "NODE_ENV=test nyc tape 'test/**/*.test.js' && npm run deps && npm run lint",
     "db:seed": "NODE_ENV=development node scripts/seed.js"
   },
   "keywords": [],
@@ -21,6 +21,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-pino-logger": "^7.0.0",
+    "get-port-sync": "^1.0.1",
     "healthpoint": "^1.0.0",
     "mysql": "^2.18.1",
     "productionize": "^5.0.0",
@@ -33,6 +34,7 @@
     "nyc": "^17.0.0",
     "pino-pretty": "^11.2.0",
     "rewire": "^9.0.0",
+    "servertest": "^1.2.1",
     "sinon": "^21.0.0",
     "standard": "^17.1.0",
     "tape": "^5.7.5"

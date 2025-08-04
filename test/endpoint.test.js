@@ -1,6 +1,5 @@
-process.env.NODE_ENV = 'test'
 const test = require('tape')
-const jsonist = require('jsonist')
+const servertest = require('servertest')
 const http = require('http')
 const rewire = require('rewire')
 
@@ -21,49 +20,50 @@ endpointsModule.__set__('projectDb', projectDb)
 endpointsModule.__set__('currency', currency)
 
 const endpoints = endpointsModule
-const app = require('express')()
-app.use(require('body-parser').json())
-// Add /health endpoint for test compatibility
-app.get('/health', (_req, res) => res.status(200).json({ ok: true }))
-app.use('/api', endpoints)
-app.use('*', (_req, res) => {
-  res.status(404).json({ error: 'Not found' })
-})
-const server = http.createServer(app)
-const baseUrl = 'http://localhost:54321'
+const express = require('express')
 
-let serverInstance
+function makeServer () {
+  const app = express()
+  app.use(require('body-parser').json())
+  app.get('/health', (_req, res) => res.status(200).json({ ok: true }))
+  app.use('/api', endpoints)
+  app.use('*', (_req, res) => {
+    res.status(404).json({ error: 'Not found' })
+  })
+  return http.createServer((req, res) => app.handle(req, res))
+}
 // Mock project data for tests
 const mockProjects = []
 
-// Start server before tests
-test('setup', t => {
-  serverInstance = server.listen(54321, () => t.end())
-})
-
 test('GET /health should return 200', function (t) {
-  jsonist.get(baseUrl + '/health', (err, body, res) => {
+  const server = makeServer()
+  const st = servertest(server, '/health', { method: 'GET', encoding: 'json' }, (err, res) => {
     t.error(err, 'No error')
     t.equal(res.statusCode, 200, 'Should return 200')
     t.end()
   })
+  st.on('end', () => server.close())
 })
 
 test('GET /api/ok should return 200', function (t) {
-  jsonist.get(baseUrl + '/api/ok', (err, body, res) => {
+  const server = makeServer()
+  const st = servertest(server, '/api/ok', { method: 'GET', encoding: 'json' }, (err, res) => {
     t.error(err, 'No error')
     t.equal(res.statusCode, 200, 'Should return 200')
-    t.ok(body.ok, 'Should return a body')
+    t.ok(res.body.ok, 'Should return a body')
     t.end()
   })
+  st.on('end', () => server.close())
 })
 
 test('GET /nonexistent should return 404', function (t) {
-  jsonist.get(baseUrl + '/nonexistent', (err, body, res) => {
+  const server = makeServer()
+  const st = servertest(server, '/nonexistent', { method: 'GET', encoding: 'json' }, (err, res) => {
     t.error(err, 'No error')
     t.equal(res.statusCode, 404, 'Should return 404')
     t.end()
   })
+  st.on('end', () => server.close())
 })
 
 test('POST /api/project/budget/currency returns project and TTD', t => {
@@ -81,12 +81,13 @@ test('POST /api/project/budget/currency returns project and TTD', t => {
     escalationRate: 3.46,
     finalBudgetUsd: 247106.75
   })
-  const body = { year: 2024, projectName: 'Peking roasted duck Chanel', currency: 'TTD' }
-  jsonist.post(baseUrl + '/api/project/budget/currency', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ year: 2024, projectName: 'Peking roasted duck Chanel', currency: 'TTD' })
+  const st = servertest(server, '/api/project/budget/currency', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(resBody.success)
-    const d = resBody.data[0]
+    t.ok(res.body.success)
+    const d = res.body.data[0]
     t.equal(d.projectId, 1)
     t.equal(d.projectName, 'Peking roasted duck Chanel')
     t.equal(d.year, 2024)
@@ -101,6 +102,8 @@ test('POST /api/project/budget/currency returns project and TTD', t => {
     t.ok(typeof d.finalBudgetTtd === 'number')
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project', t => {
@@ -118,12 +121,13 @@ test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project
     escalationRate: 2.0,
     finalBudgetUsd: 110000
   })
-  const body = { year: 2024, projectName: 'Non TTD Project', currency: 'TTD' }
-  jsonist.post(baseUrl + '/api/project/budget/currency', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ year: 2024, projectName: 'Non TTD Project', currency: 'TTD' })
+  const st = servertest(server, '/api/project/budget/currency', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(resBody.success)
-    const d = resBody.data[0]
+    t.ok(res.body.success)
+    const d = res.body.data[0]
     t.equal(d.projectId, 2)
     t.equal(d.projectName, 'Non TTD Project')
     t.equal(d.year, 2024)
@@ -138,6 +142,8 @@ test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project
     t.notOk('finalBudgetTtd' in d)
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 // Additional test cases for mockProjects
@@ -156,12 +162,13 @@ test('POST /api/project/budget/currency returns project and TTD with mock data',
     escalationRate: 3.46,
     finalBudgetUsd: 247106.75
   })
-  const body = { year: 2024, projectName: 'Peking roasted duck Chanel', currency: 'TTD' }
-  jsonist.post(baseUrl + '/api/project/budget/currency', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ year: 2024, projectName: 'Peking roasted duck Chanel', currency: 'TTD' })
+  const st = servertest(server, '/api/project/budget/currency', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(resBody.success)
-    const d = resBody.data[0]
+    t.ok(res.body.success)
+    const d = res.body.data[0]
     t.equal(d.projectId, 1)
     t.equal(d.projectName, 'Peking roasted duck Chanel')
     t.equal(d.year, 2024)
@@ -176,6 +183,8 @@ test('POST /api/project/budget/currency returns project and TTD with mock data',
     t.ok(typeof d.finalBudgetTtd === 'number')
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project with mock data', t => {
@@ -193,12 +202,13 @@ test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project
     escalationRate: 2.0,
     finalBudgetUsd: 110000
   })
-  const body = { year: 2024, projectName: 'Non TTD Project', currency: 'TTD' }
-  jsonist.post(baseUrl + '/api/project/budget/currency', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ year: 2024, projectName: 'Non TTD Project', currency: 'TTD' })
+  const st = servertest(server, '/api/project/budget/currency', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(resBody.success)
-    const d = resBody.data[0]
+    t.ok(res.body.success)
+    const d = res.body.data[0]
     t.equal(d.projectId, 2)
     t.equal(d.projectName, 'Non TTD Project')
     t.equal(d.year, 2024)
@@ -213,55 +223,65 @@ test('POST /api/project/budget/currency omits finalBudgetTtd for non-TTD project
     t.notOk('finalBudgetTtd' in d)
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 test('POST /api/project/budget/currency returns 400 for missing fields', t => {
-  const body = { projectName: 'Peking roasted duck Chanel' }
-  jsonist.post(baseUrl + '/api/project/budget/currency', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ projectName: 'Peking roasted duck Chanel' })
+  const st = servertest(server, '/api/project/budget/currency', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 400)
-    t.ok(resBody.error)
+    t.ok(res.body.error)
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 test('GET /api/project/budget/:id returns project', t => {
-  jsonist.get(baseUrl + '/api/project/budget/1', (err, body, res) => {
+  const server = makeServer()
+  const st = servertest(server, '/api/project/budget/1', { method: 'GET', encoding: 'json' }, (err, res) => {
     t.error(err)
     t.ok(res.statusCode === 200 || res.statusCode === 404)
     t.end()
   })
+  st.on('end', () => server.close())
 })
 
 test('POST /api/project/budget adds project', t => {
-  const body = { projectId: 2, projectName: 'Test', year: 2025 }
-  jsonist.post(baseUrl + '/api/project/budget', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ projectId: 2, projectName: 'Test', year: 2025 })
+  const st = servertest(server, '/api/project/budget', { method: 'POST', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 201)
-    t.ok(resBody.success)
+    t.ok(res.body.success)
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 test('PUT /api/project/budget/:id updates project', t => {
-  const body = { projectName: 'Updated' }
-  jsonist.put(baseUrl + '/api/project/budget/1', body, (err, resBody, res) => {
+  const server = makeServer()
+  const body = JSON.stringify({ projectName: 'Updated' })
+  const st = servertest(server, '/api/project/budget/1', { method: 'PUT', encoding: 'json', headers: { 'content-type': 'application/json' } }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(resBody.success)
+    t.ok(res.body.success)
     t.end()
   })
+  st.end(body)
+  st.on('end', () => server.close())
 })
 
 test('DELETE /api/project/budget/:id deletes project', t => {
-  jsonist.delete(baseUrl + '/api/project/budget/1', (err, body, res) => {
+  const server = makeServer()
+  const st = servertest(server, '/api/project/budget/1', { method: 'DELETE', encoding: 'json' }, (err, res) => {
     t.error(err)
     t.equal(res.statusCode, 200)
-    t.ok(body.success)
+    t.ok(res.body.success)
     t.end()
   })
-})
-
-// Stop server after tests
-test('teardown', t => {
-  serverInstance.close(() => t.end())
+  st.on('end', () => server.close())
 })
