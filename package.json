@@ -21,7 +21,6 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-pino-logger": "^7.0.0",
-    "get-port-sync": "^1.0.1",
     "healthpoint": "^1.0.0",
     "mysql": "^2.18.1",
     "productionize": "^5.0.0",
@@ -29,7 +28,6 @@
   },
   "devDependencies": {
     "depcheck": "^1.4.7",
-    "jsonist": "^3.0.1",
     "nodemon": "^3.1.3",
     "nyc": "^17.0.0",
     "pino-pretty": "^11.2.0",
